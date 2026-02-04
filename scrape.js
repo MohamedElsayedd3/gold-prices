@@ -1,7 +1,7 @@
 
-import { axios } from 'axios';
-import { cheerio } from 'cheerio';
-import { fs } from 'fs';
+import  'axios';
+import 'cheerio';
+import 'fs';
 
 async function scrapePrices() {
     try {
