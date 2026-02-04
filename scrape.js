@@ -1,7 +1,7 @@
 
-const axios = require('axios');
-const cheerio = require('cheerio');
-const fs = require('fs');
+import { get } from 'axios';
+import { load } from 'cheerio';
+import { writeFileSync } from 'fs';
 
 async function scrapePrices() {
     try {
