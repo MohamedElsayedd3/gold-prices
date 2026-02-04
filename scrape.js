@@ -14,7 +14,7 @@ async function scrapePrices() {
         
         for (let url of sources) {
             try {
-                console.log(Trying ${url}...);
+                console.log("Trying ${url}...");
                 const { data } = await axios.get(url, {
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -68,7 +68,7 @@ async function scrapePrices() {
                     break;
                 }
             } catch (e) {
-                console.log(❌ Failed ${url}:, e.message);
+                console.log("❌ Failed ${url}:, e.message");
                 continue;
             }
         }
@@ -90,7 +90,7 @@ async function scrapePrices() {
             gold: { 
                 "24": {sell: 4025, buy: 3985},
 
-محمد, [2/4/2026 8:49 PM]
+
 "21": {sell: 3522, buy: 3482}, 
                 "18": {sell: 3019, buy: 2979} 
             },
