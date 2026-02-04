@@ -1,7 +1,7 @@
 
-import { get } from 'axios';
-import { load } from 'cheerio';
-import { writeFileSync } from 'fs';
+import { axios } from 'axios';
+import { cheerio } from 'cheerio';
+import { fs } from 'fs';
 
 async function scrapePrices() {
     try {
