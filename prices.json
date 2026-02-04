@@ -1,0 +1,16 @@
+
+{
+  "date": "2024-01-01T00:00:00Z",
+  "note": "Initial placeholder - will be updated by GitHub Actions",
+  "gold": {
+    "24": {"sell": 4025, "buy": 3985},
+    "21": {"sell": 3522, "buy": 3482},
+    "18": {"sell": 3019, "buy": 2979}
+  },
+  "silver": {
+    "999": {"sell": 47, "buy": 44},
+    "925": {"sell": 43, "buy": 40},
+    "800": {"sell": 37, "buy": 34}
+  },
+  "usdToEgp": 49.10
+}
