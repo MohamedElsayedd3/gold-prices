@@ -1,4 +1,4 @@
-محمد, [2/4/2026 8:49 PM]
+
 const axios = require('axios');
 const cheerio = require('cheerio');
 const fs = require('fs');
