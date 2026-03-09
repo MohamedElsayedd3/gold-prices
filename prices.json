@@ -1,11 +1,11 @@
 {
   "gold": {
-    "24": { "sell": 8570, "buy": 8455 },
+    "24": { "sell": 8510, "buy": 8490 },
     "21": { "sell": 7500, "buy": 7400 },
-    "18": { "sell": 6430, "buy": 6340 },
-    "14": { "sell": 4500, "buy": 4930 }
+    "18": { "sell": 6390, "buy": 6370 },
+    "14": { "sell": 4970, "buy": 4950 }
   },
-  "goldPound": { "price": 60000 },
-  "goldOunce": { "price": 268000 },
+  "goldPound": { "price": 59600 },
+  "goldOunce": { "price": 264700 },
   "lastUpdate": "2026-02-06T21:00:00.000Z"
 }
