@@ -31,8 +31,8 @@ jobs:
         run: |
           git config --global user.name "Gold-Bot"
           git config --global user.email "bot@goldapp.com"
-          git checkout package.json package-lock.json  true
+          git checkout package.json package-lock.json || true
           git add prices.json
-          git commit -m "Auto-update gold prices from eDahab"  true
+          git commit -m "Auto-update gold prices from eDahab" || true
           git pull --rebase origin main
           git push origin main
