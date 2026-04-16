@@ -1,0 +1,38 @@
+name: Update Gold Prices
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: npm install puppeteer axios
+
+      - name: Run Scraper
+        run: node scraper.js
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "Gold-Bot"
+          git config --global user.email "bot@goldapp.com"
+          git checkout package.json package-lock.json || true
+          git add prices.json
+          git commit -m "Auto-update gold prices from eDahab" || true
+          git pull --rebase origin main
+          git push origin main
