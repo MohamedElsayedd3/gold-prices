@@ -16,21 +16,21 @@ async function scrapePrices() {
 
     try {
         // 1. Fetch Currency Rates from Google Finance
-        for (const symbol of currenciesToFetch) {
+        for (var i = 0; i < currenciesToFetch.length; i++) {
+            var symbol = currenciesToFetch[i];
             try {
-                console.log(Fetching ${symbol}-EGP...);
-                await page.goto(https://www.google.com/finance/quote/${symbol}-EGP, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                const rate = await page.evaluate(() => {
-                    // Google Finance uses data-last-price attribute for the dynamic price
-                    const priceElement = document.querySelector('[data-last-price]');
+                console.log('Fetching ' + symbol + '-EGP from Google...');
+                await page.goto('https://www.google.com/finance/quote/' + symbol + '-EGP', { waitUntil: 'domcontentloaded', timeout: 30000 });
+                const rate = await page.evaluate(function() {
+                    var priceElement = document.querySelector('[data-last-price]');
                     return priceElement ? parseFloat(priceElement.getAttribute('data-last-price')) : null;
                 });
                 if (rate) {
                     currencyRates[symbol] = rate;
-                    console.log(${symbol}: ${rate});
+                    console.log(symbol + ': ' + rate);
                 }
             } catch (err) {
-                console.warn(Could not fetch ${symbol}: ${err.message});
+                console.warn('Could not fetch ' + symbol + ': ' + err.message);
             }
         }
 
@@ -46,21 +46,22 @@ async function scrapePrices() {
             }
 
             var items = document.querySelectorAll('.price-item');
-            items.forEach(function(item) {
+            for (var j = 0; j < items.length; j++) {
+                var item = items[j];
                 var text = item.innerText;
                 var nums = item.querySelectorAll('.number-font');
                 if (nums.length >= 1) {
                     var sell = cleanNum(nums[0].innerText);
                     var buy = nums[1] ? cleanNum(nums[1].innerText) : (sell - 20);
                     
-                    if (text.includes('24')) data.gold['24'] = { sell: sell.toString(), buy: buy.toString() };
-                    else if (text.includes('21')) data.gold['21'] = { sell: sell.toString(), buy: buy.toString() };
-                    else if (text.includes('18')) data.gold['18'] = { sell: sell.toString(), buy: buy.toString() };
-                    else if (text.includes('14')) data.gold['14'] = { sell: sell.toString(), buy: buy.toString() };
+                    if (text.indexOf('24') !== -1) data.gold['24'] = { sell: sell.toString(), buy: buy.toString() };
+                    else if (text.indexOf('21') !== -1) data.gold['21'] = { sell: sell.toString(), buy: buy.toString() };
+                    else if (text.indexOf('18') !== -1) data.gold['18'] = { sell: sell.toString(), buy: buy.toString() };
+                    else if (text.indexOf('14') !== -1) data.gold['14'] = { sell: sell.toString(), buy: buy.toString() };
                 }
-            });
+            }
 
-            // Robust pound/ounce calculation based on the gold prices found
+            // Logic check for local Market
             if (data.gold['21']) {
                 data.goldPound = { price: (parseInt(data.gold['21'].sell) * 8).toString() };
             }
