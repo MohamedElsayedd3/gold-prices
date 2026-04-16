@@ -30,7 +30,7 @@ async function scrapePrices() {
 
         var currentUSDToEGP = currencyRates['USD'] || 52.0;
 
-        // 2. Fetch Gold Data from eDahab (Robust Match Mode)
+        // 2. Fetch Gold Data from eDahab (Direct Scraping for Pound & Ounce USD)
         console.log('Fetching gold from eDahab...');
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2', timeout: 60000 });
         const scrapedData = await page.evaluate(function() {
@@ -41,36 +41,31 @@ async function scrapePrices() {
                 return isNaN(num) ? 0 : num;
             }
 
-            // High Precision Search for Pound and Ounce USD
             var tags = document.querySelectorAll('div, span, p');
             for (var k = 0; k < tags.length; k++) {
                 var el = tags[k];
-                var txt = el.innerText || "";
-                
-                // Direct Gold Pound scraping
-                if (txt.includes('الجنيه الذهب') && data.goldPound === "0") {
-                    var pEl = el.parentElement.querySelector('.number-font') || el.querySelector('.number-font');
-                    if (pEl) data.goldPound = cleanNum(pEl.innerText).toString();
-                }
-                
-                // Ounce USD scraping
-                if ((txt.includes('الأوقية') || txt.includes('أونصة')) && data.ounceUSD === 0) {
-                    var pEl = el.parentElement.querySelector('.number-font') || el.querySelector('.number-font');
-                    if (pEl) {
-                        var matches = pEl.innerText.match(/\d{4}(\.\d+)?/);
-                        if (matches) data.ounceUSD = parseFloat(matches[0]);
+                if (el && el.innerText) {
+                    var txt = el.innerText.trim();
+                    if (txt.includes('الجنيه الذهب') && data.goldPound === "0") {
+                        var pEl = el.parentElement.querySelector('.number-font') || el.querySelector('.number-font');
+                        if (pEl) data.goldPound = cleanNum(pEl.innerText).toString();
+                    }
+                    if ((txt.includes('الأوقية') || txt.includes('أونصة')) && data.ounceUSD === 0) {
+                        var pEl = el.parentElement.querySelector('.number-font') || el.querySelector('.number-font');
+                        if (pEl) {
+                            var matches = pEl.innerText.match(/\d{4}(\.\d+)?/);
+                            if (matches) data.ounceUSD = parseFloat(matches[0]);
+                        }
                     }
                 }
             }
 
-            // Normal Carats - using inclusive match to avoid Arabic font issues
             var items = document.querySelectorAll('.price-item');
             items.forEach(function(item) {
                 var t = item.innerText;
                 var nums = item.querySelectorAll('.number-font');
                 if (nums && nums.length >= 1) {
                     var s = cleanNum(nums[0].innerText);
-                    // Standard labels without strict font dependencies
                     if (t.includes('24') && !t.includes('2024')) data.gold['24'] = { sell: s.toString(), buy: (s-20).toString() };
                     else if (t.includes('21')) data.gold['21'] = { sell: s.toString(), buy: (s-15).toString() };
                     else if (t.includes('18')) data.gold['18'] = { sell: s.toString(), buy: (s-10).toString() };
@@ -80,7 +75,7 @@ async function scrapePrices() {
             return data;
         });
 
-        // 3. Final Calculations based on User Request
+        // 3. Final Calculations
         var finalOunceEGP = "0";
         if (scrapedData.ounceUSD > 0) {
             finalOunceEGP = Math.round(scrapedData.ounceUSD * currentUSDToEGP).toString();
@@ -99,12 +94,7 @@ async function scrapePrices() {
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalOutput, null, 4));
         console.log('Update Successful (Pound: ' + scrapedData.goldPound + ', Ounce: ' + finalOunceEGP + ')');
 
-    } catch (error) {
-        console.error('Fatal Error:', error);
-        process.exit(1);
-    } finally {
-        await browser.close();
-    }
+    } catch (error) { console.error(error); process.exit(1); }
+    finally { await browser.close(); }
 }
-
 scrapePrices();
