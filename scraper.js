@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapePrices() {
-    console.log('Starting Scraper (Final Direct + Calculated Logic)...');
+    console.log('Starting Scraper (Final Verified Pound & Ounce Logic)...');
     
     const browser = await puppeteer.launch({ 
         headless: "new",
@@ -30,7 +30,7 @@ async function scrapePrices() {
 
         var currentUSDToEGP = currencyRates['USD'] || 52.0;
 
-        // 2. Fetch direct values from eDahab
+        // 2. Fetch data from eDahab with structural verification
         console.log('Fetching data from eDahab...');
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2', timeout: 60000 });
         const scrapedData = await page.evaluate(function() {
@@ -41,27 +41,37 @@ async function scrapePrices() {
                 return isNaN(num) ? 0 : num;
             }
 
-            // Expert search for labels
-            var allElements = document.querySelectorAll('div, span, p');
+            // High-precision search for Gold Pound and Ounce
+            var allElements = document.querySelectorAll('*');
             for (var k = 0; k < allElements.length; k++) {
-                var txt = allElements[k].innerText;
-                
-                // Direct Gold Pound match
-                if (txt.includes('الجنيه الذهب') && data.goldPound === "0") {
-                    var pEl = allElements[k].parentElement.querySelector('.number-font') || allElements[k].querySelector('.number-font');
-                    if (pEl) data.goldPound = cleanNum(pEl.innerText).toString();
-                }
-                
-                // Ounce USD match
-                if (txt.includes('الأوقية') || txt.includes('أونصة')) {
-                    var matches = txt.match(/\d{4}(\.\d+)?/);
-                    if (matches) {
-                        data.ounceUSD = parseFloat(matches[0]);
+                var el = allElements[k];
+                if (el.children.length === 0) { 
+                    var txt = el.innerText.trim();
+                    
+                    // Direct Gold Pound scraping
+                    if (txt.includes('الجنيه الذهب') && data.goldPound === "0") {
+                        var container = el.closest('div');
+                        if (container) {
+                            var priceEl = container.querySelector('.number-font');
+                            if (priceEl) data.goldPound = cleanNum(priceEl.innerText).toString();
+                        }
+                    }
+                    
+                    // Direct Ounce USD scraping
+                    if ((txt.includes('الأوقية') || txt.includes('أونصة')) && data.ounceUSD === 0) {
+                        var container = el.closest('div');
+                        if (container) {
+                            var priceEl = container.querySelector('.number-font');
+                            if (priceEl) {
+                                var val = parseFloat(priceEl.innerText.replace(/[^0-9.]/g, ''));
+                                if (val > 1000) data.ounceUSD = val;
+                            }
+                        }
                     }
                 }
             }
 
-            // Karat prices
+            // Normal carats (price-item)
             var items = document.querySelectorAll('.price-item');
             items.forEach(function(item) {
                 var t = item.innerText;
@@ -77,7 +87,7 @@ async function scrapePrices() {
             return data;
         });
 
-        // 3. Finalization
+        // 3. Final Result Generation
         var finalOunceEGP = "0";
         if (scrapedData.ounceUSD > 0) {
             finalOunceEGP = Math.round(scrapedData.ounceUSD * currentUSDToEGP).toString();
@@ -85,21 +95,21 @@ async function scrapePrices() {
             finalOunceEGP = Math.round(parseInt(scrapedData.gold['24'].sell) * 31.1035).toString();
         }
 
-        // Fallback for gold pound if direct scraping failed
-        if (scrapedData.goldPound === "0" && scrapedData.gold['21']) {
-            scrapedData.goldPound = (parseInt(scrapedData.gold['21'].sell) * 8).toString();
+        var finalPoundEGP = scrapedData.goldPound;
+        if (finalPoundEGP === "0" && scrapedData.gold['21']) {
+            finalPoundEGP = (parseInt(scrapedData.gold['21'].sell) * 8).toString();
         }
 
         const finalOutput = {
             gold: scrapedData.gold,
-            goldPound: { price: scrapedData.goldPound },
+            goldPound: { price: finalPoundEGP },
             goldOunce: { price: finalOunceEGP },
             currencyRates: currencyRates,
             lastUpdate: new Date().toISOString()
         };
 
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalOutput, null, 4));
-        console.log('Update Successful (Pound: ' + scrapedData.goldPound + ', Ounce: ' + finalOunceEGP + ')');
+        console.log('Update Successful (Verified Pound: ' + finalPoundEGP + ')');
 
     } catch (error) {
         console.error('Fatal Error:', error);
