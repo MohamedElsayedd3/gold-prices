@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapePrices() {
-    console.log('Starting Scraper (Ounce from eDahab, Multiplied by Google USD Rate)...');
+    console.log('Starting Scraper (Ounce Selection Fix Mode)...');
     
     const browser = await puppeteer.launch({ 
         headless: "new",
@@ -15,7 +15,7 @@ async function scrapePrices() {
     const currencyRates = {};
 
     try {
-        // 1. Fetch Precise USD Rate from Google Finance
+        // 1. Fetch Currency Rates from Google
         for (var i = 0; i < currenciesToFetch.length; i++) {
             var symbol = currenciesToFetch[i];
             try {
@@ -28,8 +28,8 @@ async function scrapePrices() {
             } catch (e) { }
         }
 
-        // 2. Fetch Gold Prices & the Ounce USD price from eDahab
-        console.log('Fetching data from eDahab...');
+        // 2. Fetch Gold Prices & Ounce from eDahab
+        console.log('Fetching gold data...');
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2', timeout: 60000 });
         const scrapedData = await page.evaluate(function() {
             var data = { gold: {}, ounceUSD: 0 };
@@ -39,7 +39,6 @@ async function scrapePrices() {
                 return Math.round(num / 5) * 5;
             }
 
-            // Scrape Karat Prices
             var items = document.querySelectorAll('.price-item');
             for (var j = 0; j < items.length; j++) {
                 var item = items[j];
@@ -55,51 +54,47 @@ async function scrapePrices() {
                 }
             }
 
-            // Locate "الأوقية" and extract its USD value
+            // Precise Ounce Extraction: Ignore '1' and find the actual price > 1000
             var allElements = document.querySelectorAll('div, span, p');
             for (var k = 0; k < allElements.length; k++) {
                 var el = allElements[k];
                 var txt = el.innerText;
                 if (txt.includes('الأوقية') || txt.includes('أونصة')) {
-                    // Extract number from text like "الأوقية عالمياً 4793 دولار"
-                    var priceText = txt.replace(/[^0-9.]/g, '');
-                    var val = parseFloat(priceText);
-                    if (!isNaN(val) && val > 100) {
-                        data.ounceUSD = val;
-                        break;
+                    var matches = txt.match(/\d+(\.\d+)?/g);
+                    if (matches) {
+                        for (var m = 0; m < matches.length; m++) {
+                            var val = parseFloat(matches[m]);
+                            if (val > 1000) { 
+                                data.ounceUSD = val;
+                                break;
+                            }
+                        }
                     }
+                    if (data.ounceUSD > 0) break;
                 }
             }
             return data;
         });
 
-        // 3. Final Calculations
+        // 3. Final Output Generation
         var usdRate = currencyRates['USD'] || 50;
-        var goldDataOunce = { price: "0" };
-        var goldDataPound = { price: "0" };
-        
-        // Calculation requested: (Ounce USD from site) * (USD Rate from Google)
+        var finalOunceEGP = "0";
         if (scrapedData.ounceUSD > 0) {
-            goldDataOunce = { price: Math.round(scrapedData.ounceUSD * usdRate).toString() };
+            finalOunceEGP = Math.round(scrapedData.ounceUSD * usdRate).toString();
         } else if (scrapedData.gold['24']) {
-            goldDataOunce = { price: Math.round(parseInt(scrapedData.gold['24'].sell) * 31.1035).toString() };
-        }
-
-        // Gold Pound = 8g of 21K
-        if (scrapedData.gold['21']) {
-            goldDataPound = { price: (parseInt(scrapedData.gold['21'].sell) * 8).toString() };
+            finalOunceEGP = Math.round(parseInt(scrapedData.gold['24'].sell) * 31.1035).toString();
         }
 
         const finalOutput = {
             gold: scrapedData.gold,
-            goldPound: goldDataPound,
-            goldOunce: goldDataOunce,
+            goldPound: scrapedData.gold['21'] ? (parseInt(scrapedData.gold['21'].sell) * 8).toString() : "0",
+            goldOunce: { price: finalOunceEGP },
             currencyRates: currencyRates,
             lastUpdate: new Date().toISOString()
         };
 
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalOutput, null, 4));
-        console.log('Update Successful (Custom Ounce Calculation applied)!');
+        console.log('Update Successful (Ounce extraction logic improved)!');
 
     } catch (error) {
         console.error('Fatal Error:', error);
