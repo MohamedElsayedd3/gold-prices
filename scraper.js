@@ -78,7 +78,8 @@ async function scrapePrices() {
         } else if (goldData.gold['24']) {
             goldData.goldOunce = { price: Math.round(parseInt(goldData.gold['24'].sell) * 31.1035).toString() };
         }
-// Gold Pound = 8g of 21K
+
+        // Gold Pound = 8g of 21K
         if (goldData.gold['21']) {
             goldData.goldPound = { price: (parseInt(goldData.gold['21'].sell) * 8).toString() };
         }
