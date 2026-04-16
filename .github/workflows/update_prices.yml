@@ -29,4 +29,5 @@ jobs:
           git config --global user.email "bot@goldapp.com"
           git add prices.json
           git commit -m "Auto-update gold prices from eDahab" || echo "No changes to commit"
-          git push
+          git pull --rebase origin main
+          git push origin main
