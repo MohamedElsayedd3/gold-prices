@@ -31,7 +31,15 @@ jobs:
         run: |
           git config --global user.name "Gold-Bot"
           git config --global user.email "bot@goldapp.com"
+          
+          # إضافة ملف الأسعار الذي تغير فقط
           git add prices.json
+          
+          # تسجيل التغيير (Commit)
           git commit -m "Auto-update gold prices from eDahab" || echo "No changes to commit"
+          
+          # سحب أي تغييرات خارجية (Rebase) لضمان نظافة السجل
           git pull --rebase origin main
+          
+          # الرفع النهائي
           git push origin main
