@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapePrices() {
-    console.log('Starting Scraper (Gold: eDahab, Currencies: Google Finance)...');
+    console.log('Starting Robust Scraper (Gold & Precise Ounce Logic)...');
     
     const browser = await puppeteer.launch({ 
         headless: "new",
@@ -13,28 +13,34 @@ async function scrapePrices() {
     
     const currenciesToFetch = ['USD', 'EUR', 'GBP', 'SAR', 'AED', 'KWD', 'QAR', 'JOD', 'BHD', 'OMR', 'TRY', 'CAD'];
     const currencyRates = {};
+    let globalOunceUSD = 0;
 
     try {
-        // 1. Fetch Currency Rates from Google Finance
+        // 1. Fetch Currency Rates + Global Gold Ounce USD from Google Finance
         for (var i = 0; i < currenciesToFetch.length; i++) {
             var symbol = currenciesToFetch[i];
             try {
-                console.log('Fetching ' + symbol + '-EGP from Google...');
+                console.log('Fetching ' + symbol + '-EGP...');
                 await page.goto('https://www.google.com/finance/quote/' + symbol + '-EGP', { waitUntil: 'domcontentloaded', timeout: 30000 });
                 const rate = await page.evaluate(function() {
-                    var priceElement = document.querySelector('[data-last-price]');
-                    return priceElement ? parseFloat(priceElement.getAttribute('data-last-price')) : null;
+                    var el = document.querySelector('[data-last-price]');
+                    return el ? parseFloat(el.getAttribute('data-last-price')) : null;
                 });
-                if (rate) {
-                    currencyRates[symbol] = rate;
-                    console.log(symbol + ': ' + rate);
-                }
-            } catch (err) {
-                console.warn('Could not fetch ' + symbol + ': ' + err.message);
-            }
+                if (rate) currencyRates[symbol] = rate;
+            } catch (e) { console.warn('Err fetching ' + symbol); }
         }
 
-        // 2. Fetch Gold Prices from eDahab
+        // Fetch Global Gold Ounce (XAU-USD)
+        try {
+            console.log('Fetching Global Ounce (XAU-USD)...');
+            await page.goto('https://www.google.com/finance/quote/XAU-USD', { waitUntil: 'domcontentloaded' });
+            globalOunceUSD = await page.evaluate(function() {
+                var el = document.querySelector('[data-last-price]');
+                return el ? parseFloat(el.getAttribute('data-last-price')) : null;
+            });
+        } catch (e) { console.warn('Err fetching XAU-USD'); }
+
+        // 2. Fetch Gold Prices from eDahab (Special focus on Karat 14)
         console.log('Fetching gold prices from eDahab...');
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2', timeout: 60000 });
         const goldData = await page.evaluate(function() {
@@ -60,19 +66,23 @@ async function scrapePrices() {
                     else if (text.indexOf('14') !== -1) data.gold['14'] = { sell: sell.toString(), buy: buy.toString() };
                 }
             }
-
-            // Logic check for local Market
-            if (data.gold['21']) {
-                data.goldPound = { price: (parseInt(data.gold['21'].sell) * 8).toString() };
-            }
-            if (data.gold['24']) {
-                data.goldOunce = { price: Math.round(parseInt(data.gold['24'].sell) * 31.1035).toString() };
-            }
-
             return data;
         });
 
-        // 3. Save Everything to prices.json
+        // 3. Final Calculations
+        var currentUSDToEGP = currencyRates['USD'] || 50;
+        
+        // Gold Ounce = (Global USD Price from Google) * (USD/EGP Rate from Google)
+        if (globalOunceUSD > 0) {
+            goldData.goldOunce = { price: Math.round(globalOunceUSD * currentUSDToEGP).toString() };
+        } else if (goldData.gold['24']) {
+            goldData.goldOunce = { price: Math.round(parseInt(goldData.gold['24'].sell) * 31.1035).toString() };
+        }
+// Gold Pound = 8g of 21K
+        if (goldData.gold['21']) {
+            goldData.goldPound = { price: (parseInt(goldData.gold['21'].sell) * 8).toString() };
+        }
+
         const finalOutput = {
             gold: goldData.gold,
             goldPound: goldData.goldPound,
@@ -82,7 +92,7 @@ async function scrapePrices() {
         };
 
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalOutput, null, 4));
-        console.log('Update Successful with Google Finance rates!');
+        console.log('Update Successful (Precise Google-based Logic)!');
 
     } catch (error) {
         console.error('Fatal Error:', error);
