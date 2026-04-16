@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapePrices() {
-    console.log('Starting Scraper (Safe & Robust Mode)...');
+    console.log('Restoring Stable Scraper Logic...');
     
     const browser = await puppeteer.launch({ 
         headless: "new",
@@ -15,87 +15,73 @@ async function scrapePrices() {
     const currencyRates = {};
 
     try {
-        // 1. Fetch currencies with safety checks
+        // 1. Currency from Google Finance (Working)
         for (var i = 0; i < currenciesToFetch.length; i++) {
             var symbol = currenciesToFetch[i];
             try {
                 await page.goto('https://www.google.com/finance/quote/' + symbol + '-EGP', { waitUntil: 'domcontentloaded', timeout: 20000 });
                 const rate = await page.evaluate(function() {
                     var el = document.querySelector('[data-last-price]');
-                    if (el && el.getAttribute('data-last-price')) {
-                        return parseFloat(el.getAttribute('data-last-price'));
-                    }
-                    return null;
+                    return el ? parseFloat(el.getAttribute('data-last-price')) : null;
                 });
                 if (rate) currencyRates[symbol] = rate;
             } catch (e) { }
         }
 
-        var currentUSDToEGP = currencyRates['USD'] || 52.0;
-
-        // 2. Scraping with null-safety
+        // 2. Gold from eDahab (Simple Price-Item Method)
+        console.log('Fetching gold prices from eDahab...');
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2', timeout: 60000 });
-        const scrapedData = await page.evaluate(function() {
-            var data = { gold: {}, goldPound: "0", ounceUSD: 0 };
+        const goldData = await page.evaluate(function() {
+            var data = { gold: {}, goldPound: { price: "0" } };
             function cleanNum(txt) {
                 var num = parseInt(txt.replace(/[^0-9]/g, ''));
                 return isNaN(num) ? 0 : num;
             }
 
-            var tags = document.querySelectorAll('div, span, p');
-            for (var k = 0; k < tags.length; k++) {
-                var el = tags[k];
-                if (el && el.innerText) {
-                    var txt = el.innerText.trim();
-                    if (txt.includes('الجنيه الذهب') && data.goldPound === "0") {
-                        var pEl = el.parentElement.querySelector('.number-font');
-                        if (pEl) data.goldPound = cleanNum(pEl.innerText).toString();
-                    }
-                    if ((txt.includes('الأوقية') || txt.includes('أونصة')) && data.ounceUSD === 0) {
-                        var pEl = el.parentElement.querySelector('.number-font');
-                        if (pEl) {
-                            var val = parseFloat(pEl.innerText.replace(/[^0-9.]/g, ''));
-                            if (val > 1000) data.ounceUSD = val;
-                        }
-                    }
-                }
-            }
-
             var items = document.querySelectorAll('.price-item');
             items.forEach(function(item) {
-                if (item && item.innerText) {
-                    var t = item.innerText;
-                    var nums = item.querySelectorAll('.number-font');
-                    if (nums && nums.length >= 1) {
-                        var s = cleanNum(nums[0].innerText);
-                        if (t.includes('عيار 24')) data.gold['24'] = { sell: s.toString(), buy: (s-20).toString() };
-                        else if (t.includes('عيار 21')) data.gold['21'] = { sell: s.toString(), buy: (s-15).toString() };
-                        else if (t.includes('عيار 18')) data.gold['18'] = { sell: s.toString(), buy: (s-10).toString() };
-                        else if (t.includes('عيار 14')) data.gold['14'] = { sell: s.toString(), buy: (s-10).toString() };
-                    }
+                var t = item.innerText;
+                var nums = item.querySelectorAll('.number-font');
+                if (nums.length >= 1) {
+                    var sell = cleanNum(nums[0].innerText).toString();
+                    if (t.includes('24') && !t.includes('2024')) data.gold['24'] = { sell: sell, buy: (parseInt(sell)-20).toString() };
+                    else if (t.includes('21')) data.gold['21'] = { sell: sell, buy: (parseInt(sell)-15).toString() };
+                    else if (t.includes('18')) data.gold['18'] = { sell: sell, buy: (parseInt(sell)-10).toString() };
+                    else if (t.includes('14')) data.gold['14'] = { sell: sell, buy: (parseInt(sell)-10).toString() };
                 }
             });
+
+            // Direct Pound scraping (Refined)
+            var all = document.querySelectorAll('div, span, p');
+            for (var k = 0; k < all.length; k++) {
+                if (all[k].innerText.includes('الجنيه الذهب')) {
+                    var pEl = all[k].parentElement.querySelector('.number-font');
+                    if (pEl) data.goldPound.price = cleanNum(pEl.innerText).toString();
+                }
+            }
             return data;
         });
 
-        // 3. Calculation Logic
-        var finalOunceEGP = "0";
-        if (scrapedData.ounceUSD > 0) finalOunceEGP = Math.round(scrapedData.ounceUSD * currentUSDToEGP).toString();
-        else if (scrapedData.gold['24']) finalOunceEGP = Math.round(parseInt(scrapedData.gold['24'].sell) * 31.1035).toString();
-
-        var finalPoundEGP = scrapedData.goldPound;
-        if (finalPoundEGP === "0" && scrapedData.gold['21']) finalPoundEGP = (parseInt(scrapedData.gold['21'].sell) * 8).toString();
+        // 3. Finalization
+        if (goldData.goldPound.price === "0" && goldData.gold['21']) {
+            goldData.goldPound.price = (parseInt(goldData.gold['21'].sell) * 8).toString();
+        }
+        
+        var ouncePrice = "0";
+        if (goldData.gold['24']) {
+            ouncePrice = Math.round(parseInt(goldData.gold['24'].sell) * 31.1035).toString();
+        }
 
         const finalOutput = {
-            gold: scrapedData.gold,
-            goldPound: { price: finalPoundEGP },
-            goldOunce: { price: finalOunceEGP },
+            gold: goldData.gold,
+            goldPound: goldData.goldPound,
+            goldOunce: { price: ouncePrice },
             currencyRates: currencyRates,
             lastUpdate: new Date().toISOString()
         };
 
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalOutput, null, 4));
-        console.log('Update Successful (Robust Fix)!');
+        console.log('Update Successful (Reverted to stable version)!');
 
     } catch (error) {
         console.error('Fatal Error:', error);
