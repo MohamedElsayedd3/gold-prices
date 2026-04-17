@@ -52,20 +52,26 @@ async function scrapePrices() {
                 }
             });
 
-            // 2. استخراج الأوقية بالدولار والجنيه الذهب من الأرقام المنفصلة
+            // 2. استخراج الأوقية بالدولار والجنيه الذهب
+            // للجنيه الذهب: نعتمد على .number-font لضمان استخراج السعر
             document.querySelectorAll('.number-font').forEach(el => {
                 const parentText = (el.parentElement ? el.parentElement.innerText : '') || '';
-                
-                // البحث عن سعر الأوقية بالدولار عالمياً
-                if ((parentText.includes('الأوقية') || parentText.includes('أونصة')) && parentText.includes('دولار') && result.ounceUSD === 0) {
-                    const val = getOnlyNumber(el.innerText) || getOnlyNumber(parentText);
-                    if (val > 1000) result.ounceUSD = val;
-                }
-                
                 // البحث عن سعر الجنيه الذهب
                 if (parentText.includes('الجنيه الذهب') && result.goldPound === 0) {
                     const val = getOnlyNumber(el.innerText);
                     if (val > 10000) result.goldPound = val;
+                }
+            });
+
+            // للأوقية: نبحث في كل النصوص عشان لو الرقم مش واخد كلاس number-font
+            document.querySelectorAll('span, p, div, b, strong').forEach(el => {
+                // نتأكد إن العنصر هو اللي شايل النص الفعلي، مش عنصر أب كبير جداً
+                if (el.children.length <= 2) {
+                    const text = el.innerText || '';
+                    if ((text.includes('الأوقية') || text.includes('أونصة')) && text.includes('دولار') && result.ounceUSD === 0) {
+                        const val = getOnlyNumber(text);
+                        if (val > 1000 && val < 10000) result.ounceUSD = val;
+                    }
                 }
             });
 
