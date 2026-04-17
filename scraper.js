@@ -102,24 +102,20 @@ async function scrapePrices() {
             return result;
         });
 
-        // 3. الحسابات النهائية: الأوقية بالجنيه
-        // طلبتم بضرب الأوقية بالدولار في سعر الدولار مباشرة
-        let finalOunceEGP = "0";
+        // 3. الحسابات النهائية: الأوقية (إبقاء السعر بالدولار مع علامة $ كما طلبتم)
+        let finalOunce = "0";
         if (data.ounceUSD > 0) {
-            finalOunceEGP = (Math.round((data.ounceUSD * usdRate) / 5) * 5).toString();
-        } else if (data.gold['24']) {
-            // كخيار احتياطي لو فشل سحب سعر الأوقية بالدولار، نضرب السعر المحلي في الوزن الدقيق (31.1035 جرام)
-            finalOunceEGP = (Math.round((parseFloat(data.gold['24'].sell) * 31.1035) / 5) * 5).toString();
+            finalOunce = data.ounceUSD.toString() + " $";
         }
 
         console.log(`Ounce USD from Site: ${data.ounceUSD}`);
-        console.log(`Calculated Ounce EGP: ${finalOunceEGP}`);
+        console.log(`Saved Ounce: ${finalOunce}`);
 
         // حفظ الملف
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify({
             gold: data.gold,
             goldPound: { price: data.goldPound },
-            goldOunce: { price: finalOunceEGP },
+            goldOunce: { price: finalOunce },
             currencyRates: currencyRates,
             lastUpdate: new Date().toISOString()
         }, null, 4));
