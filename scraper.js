@@ -27,107 +27,76 @@ async function scrapePrices() {
         const data = await page.evaluate(() => {
             const result = { gold: {}, goldPound: 0, ounceUSD: 0 };
             
-            // دالة لسحب الأرقام
+            // دالة التقريب لأقرب 5 (مثلاً 1203 -> 1205، 1201 -> 1200)
+            const roundTo5 = (num) => Math.round(num / 5) * 5;
+
+            // دالة لسحب الأرقام فقط
             const getOnlyNumber = (text) => {
                 if (!text) return 0;
-                const cleaned = text.replace(/,/g, '');
-                const match = cleaned.match(/\d+(\.\d+)?/);
+                const match = text.replace(/,/g, '').match(/\d+(\.\d+)?/);
                 return match ? parseFloat(match[0]) : 0;
             };
 
-            // دالة تقريب لأقرب 5 للأسعار بالجنيه (مثلاً 1203 -> 1205، 1201 -> 1200)
-            const roundTo5 = (num) => Math.round(num / 5) * 5;
-
-            // نلف على كل العناصر في الصفحة وندور على النصوص
-            const allElements = Array.from(document.querySelectorAll('*'));
-            
-            // 1. استخراج أسعار العيارات
-            for (let el of allElements) {
-                if (el.children.length > 0) continue; // نبحث في النصوص النهائية فقط
-                const text = el.innerText ? el.innerText.trim() : '';
-                
-                // لو لقينا كلمة بتدل على عيار
-                let karst = null;
-                if (text === 'الذهب عيار 24:' || text.includes('سعر الذهب عيار 24')) karst = '24';
-                else if (text === 'الذهب عيار 21:' || text.includes('سعر الذهب عيار 21')) karst = '21';
-                else if (text === 'الذهب عيار 18:' || text.includes('سعر الذهب عيار 18')) karst = '18';
-                else if (text === 'الذهب عيار 14:' || text.includes('سعر الذهب عيار 14')) karst = '14';
-                
-                if (karst && !result.gold[karst]) {
-                    // السعر غالباً بيكون في العناصر اللي قبله أو بعده أو في صندوق الأب
-                    // طريقة أسهل: نأخذ قيم الشراء والبيع من العناصر القريبة منه اللي فيها .number-font
-                    let container = el.closest('.row') || el.closest('.flex') || el.parentElement.parentElement;
-                    if (container) {
-                        let prices = Array.from(container.querySelectorAll('.number-font')).map(p => getOnlyNumber(p.innerText));
-                        // لو ملقيناش، ندور في كل الأبناء
-                        if (prices.length === 0) prices = Array.from(container.querySelectorAll('div, span')).map(x => getOnlyNumber(x.innerText)).filter(v => v > 100);
-                        
-                        if (prices.length >= 1) {
-                            let sell = prices[0];
-                            let buy = prices.length > 1 ? prices[1] : sell - 20;
-                            // السعر الأكبر هو البيع دايماً (للعميل)
-                            if (buy > sell) {
-                                let temp = sell;
-                                sell = buy;
-                                buy = temp;
-                            }
-                            result.gold[karst] = { 
-                                sell: roundTo5(sell).toString(), 
-                                buy: roundTo5(buy).toString() 
-                            };
-                        }
-                    }
+            // 1. استخراج العيارات بأمان من كروت الأسعار (.price-item)
+            document.querySelectorAll('.price-item').forEach(item => {
+                const label = item.innerText || '';
+                const priceTags = item.querySelectorAll('.number-font');
+                if (priceTags.length >= 1) {
+                    const sell = getOnlyNumber(priceTags[0].innerText);
+                    const buy = priceTags[1] ? getOnlyNumber(priceTags[1].innerText) : (sell - 20);
+                    
+                    if (label.includes('24') && !label.includes('2024')) result.gold['24'] = { sell, buy };
+                    else if (label.includes('21')) result.gold['21'] = { sell, buy };
+                    else if (label.includes('18')) result.gold['18'] = { sell, buy };
+                    else if (label.includes('14')) result.gold['14'] = { sell, buy };
                 }
+            });
 
-                // 2. الجنيه الذهب
-                if ((text === 'الجنيه الذهب' || text.includes('سعر الجنيه الذهب')) && result.goldPound === 0) {
-                    let container = el.closest('.row') || el.closest('.flex') || el.parentElement.parentElement;
-                    if (container) {
-                        let p = Array.from(container.querySelectorAll('.number-font')).map(p => getOnlyNumber(p.innerText));
-                        if(p.length > 0 && p[0] > 10000) {
-                            result.goldPound = roundTo5(p[0]);
-                        }
-                    }
-                }
-
-                // 3. الأوقية عالمياً
-                if ((text.includes('الأوقية') || text.includes('أونصة')) && text.includes('دولار') && result.ounceUSD === 0) {
-                    const val = getOnlyNumber(text);
+            // 2. استخراج الأوقية بالدولار والجنيه الذهب من الأرقام المنفصلة
+            document.querySelectorAll('.number-font').forEach(el => {
+                const parentText = (el.parentElement ? el.parentElement.innerText : '') || '';
+                
+                // البحث عن سعر الأوقية بالدولار عالمياً
+                if ((parentText.includes('الأوقية') || parentText.includes('أونصة')) && parentText.includes('دولار') && result.ounceUSD === 0) {
+                    const val = getOnlyNumber(el.innerText) || getOnlyNumber(parentText);
                     if (val > 1000) result.ounceUSD = val;
                 }
-            }
+                
+                // البحث عن سعر الجنيه الذهب
+                if (parentText.includes('الجنيه الذهب') && result.goldPound === 0) {
+                    const val = getOnlyNumber(el.innerText);
+                    if (val > 10000) result.goldPound = val;
+                }
+            });
 
-            // حسابات احتياطية في حال فشل السحب
-            if (result.gold['21']) {
-                const sell21 = parseFloat(result.gold['21'].sell);
-                const buy21 = parseFloat(result.gold['21'].buy);
-                
-                // حساب عيار 24 لو مش موجود
-                if (!result.gold['24']) {
-                    result.gold['24'] = {
-                        sell: roundTo5(sell21 * 24 / 21).toString(),
-                        buy: roundTo5(buy21 * 24 / 21).toString()
-                    };
+            // 3. تأمين الأرقام بحسابات الصاغة في حالة فشل سحب الموقع، وتطبيق دالة التقريب
+            if (result.gold['21'] && result.gold['21'].sell > 0) {
+                const sell21 = result.gold['21'].sell;
+                const buy21 = result.gold['21'].buy;
+
+                // لو عيار 24 مش موجود أو الرقم مسحوب غلط
+                if (!result.gold['24'] || result.gold['24'].sell < 100) {
+                    result.gold['24'] = { sell: sell21 * 24 / 21, buy: buy21 * 24 / 21 };
                 }
-                // حساب عيار 18 لو مش موجود
-                if (!result.gold['18']) {
-                    result.gold['18'] = {
-                        sell: roundTo5(sell21 * 18 / 21).toString(),
-                        buy: roundTo5(buy21 * 18 / 21).toString()
-                    };
+                // لو عيار 18 مش موجود
+                if (!result.gold['18'] || result.gold['18'].sell < 100) {
+                    result.gold['18'] = { sell: sell21 * 18 / 21, buy: buy21 * 18 / 21 };
                 }
-                // حساب عيار 14 دائما للحصول على الدقة (أو لو مش موجود)
-                if (!result.gold['14'] || parseFloat(result.gold['14'].sell) < 1000) {
-                    result.gold['14'] = {
-                        sell: roundTo5(sell21 * 14 / 21).toString(),
-                        buy: roundTo5(buy21 * 14 / 21).toString()
-                    };
+                // لو عيار 14 مش موجود (بسبب تصميم الموقع)
+                if (!result.gold['14'] || result.gold['14'].sell < 100) {
+                    result.gold['14'] = { sell: sell21 * 14 / 21, buy: buy21 * 14 / 21 };
                 }
-                
-                // حساب الجنيه الذهب العرفي: 8 جرام من عيار 21
-                if (result.goldPound === 0) {
-                    result.goldPound = roundTo5(sell21 * 8);
+                // حساب الجنيه الذهب (8 جرام من عيار 21) لو مش موجود
+                if (result.goldPound < 10000) {
+                    result.goldPound = sell21 * 8;
                 }
+
+                // تطبيق التقريب لأقرب 5 على كل الأسعار المستخرجة والمحسوبة
+                Object.keys(result.gold).forEach(k => {
+                    result.gold[k].sell = roundTo5(result.gold[k].sell).toString();
+                    result.gold[k].buy = roundTo5(result.gold[k].buy).toString();
+                });
+                result.goldPound = roundTo5(result.goldPound);
             }
 
             return result;
