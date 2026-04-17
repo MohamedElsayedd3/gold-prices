@@ -111,7 +111,7 @@ async function scrapePrices() {
         // 3. الحسابات النهائية: الأوقية (إبقاء السعر بالدولار مع علامة $ كما طلبتم)
         let finalOunce = "0";
         if (data.ounceUSD > 0) {
-            finalOunce = data.ounceUSD.toString() + " $";
+            finalOunce = "$" + data.ounceUSD.toString();
         }
 
         console.log(`Ounce USD from Site: ${data.ounceUSD}`);
