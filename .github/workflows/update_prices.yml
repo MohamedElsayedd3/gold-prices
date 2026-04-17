@@ -2,7 +2,7 @@ name: Update Gold Prices
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # سيعمل كل 5 دقائق لمواكبة تغيرات السوق المباشرة
+    - cron: '*/10 * * * *' # سيعمل كل 10 دقائق لمواكبة تغيرات السوق المباشرة
   workflow_dispatch:
 
 jobs:
