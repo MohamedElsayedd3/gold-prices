@@ -21,10 +21,10 @@
         "price": 56280
     },
     "goldOunce": {
-        "price": "4811 $"
+        "price": "4815 $"
     },
     "currencyRates": {
-        "USD": 51
+        "USD": 52.0024
     },
-    "lastUpdate": "2026-04-20T19:48:13.254Z"
+    "lastUpdate": "2026-04-20T20:32:31.002Z"
 }
