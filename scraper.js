@@ -21,13 +21,11 @@ async function scrapePrices() {
         await page.goto('https://www.google.com/finance/quote/USD-EGP', { waitUntil: 'networkidle2' });
         
         const usdRate = await page.evaluate(() => {
-            // المحاولة الأولى: الـ Attribute الأساسي
             const el = document.querySelector('[data-last-price]');
             if (el && parseFloat(el.getAttribute('data-last-price')) > 10) {
                 return parseFloat(el.getAttribute('data-last-price'));
             }
 
-            // المحاولة الثانية: البحث عن السعر في العناصر اللي جوجل بتستخدمها حالياً
             const priceSelectors = ['.YMl33', '.fxKbKc', '[data-price]'];
             for (let selector of priceSelectors) {
                 const element = document.querySelector(selector);
@@ -37,7 +35,6 @@ async function scrapePrices() {
                 }
             }
 
-            // المحاولة الثالثة: البحث الشامل عن أي رقم بجانب كلمة EGP
             const allElements = Array.from(document.querySelectorAll('div, span, b'));
             const egpElement = allElements.find(e => e.innerText.includes('EGP') && /\d+\.\d+/.test(e.innerText));
             if (egpElement) {
@@ -45,7 +42,7 @@ async function scrapePrices() {
                 return match ? parseFloat(match[0]) : 50.75;
             }
 
-            return 50.75; // رقم احتياطي مميز عشان تعرف لو السحب فشل
+            return 50.75; 
         });
 
         currencyRates['USD'] = usdRate;
@@ -68,14 +65,17 @@ async function scrapePrices() {
             document.querySelectorAll('.price-item').forEach(item => {
                 const label = item.innerText || '';
                 const priceTags = item.querySelectorAll('.number-font');
+                
+                // الإصلاح: التحقق من النص الكامل للعيار بدقة لتجنب التداخل مع أسعار العملات (مثل الريال 14.28)
+                // نستخدم Regex للتأكد أن الرقم 14 أو 18 أو 21 أو 24 يسبقه كلمة "عيار"
                 if (priceTags.length >= 1) {
                     const sell = getOnlyNumber(priceTags[0].innerText);
                     const buy = priceTags[1] ? getOnlyNumber(priceTags[1].innerText) : (sell - 20);
                     
-                    if (label.includes('24') && !label.includes('2024')) result.gold['24'] = { sell, buy };
-                    else if (label.includes('21')) result.gold['21'] = { sell, buy };
-                    else if (label.includes('18')) result.gold['18'] = { sell, buy };
-                    else if (label.includes('14')) result.gold['14'] = { sell, buy };
+                    if (/عيار\s*24/.test(label) && !label.includes('2024')) result.gold['24'] = { sell, buy };
+                    else if (/عيار\s*21/.test(label)) result.gold['21'] = { sell, buy };
+                    else if (/عيار\s*18/.test(label)) result.gold['18'] = { sell, buy };
+                    else if (/عيار\s*14/.test(label)) result.gold['14'] = { sell, buy };
                 }
             });
 
@@ -98,6 +98,9 @@ async function scrapePrices() {
                 const b21 = result.gold['21'].buy;
                 if (!result.gold['24']) result.gold['24'] = { sell: s21 * 24/21, buy: b21 * 24/21 };
                 if (!result.gold['18']) result.gold['18'] = { sell: s21 * 18/21, buy: b21 * 18/21 };
+                // حساب عيار 14 احتياطياً لو لم يتم سحبه
+                if (!result.gold['14']) result.gold['14'] = { sell: s21 * 14/21, buy: b21 * 14/21 };
+                
                 if (result.goldPound === 0) result.goldPound = s21 * 8;
 
                 // تقريب الأرقام لأقرب 5
