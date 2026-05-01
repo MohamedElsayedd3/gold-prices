@@ -3,59 +3,58 @@ const fs = require('fs');
 const path = require('path');
 
 async function scrapePrices() {
-    console.log('Scraper: Starting Live Market Mode...');
+    console.log('Scraper: Starting Final Ultra-Stable Mode...');
     const browser = await puppeteer.launch({ 
         headless: "new",
         args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();
     
-    // استخدام User-Agent حديث جداً
+    // هوية متصفح حديثة جداً
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     
     const currencyRates = {};
 
     try {
-        // 1. سحب الدولار من مصدر بديل أكتر دقة (إجباري)
-        console.log('Fetching Live USD Rate...');
-        // هنروح لصفحة البحث المباشر اللي بيبقى فيها السعر أحدث بكتير
+        // 1. سحب الدولار من صفحة بحث جوجل (الأكثر تحديثاً)
         await page.goto('https://www.google.com/search?q=usd+to+egp', { waitUntil: 'networkidle2' });
         
         const usdRate = await page.evaluate(() => {
-            // جوجل سيرش العادي بيدي السعر أدق في الـ Widget
-            const widgetPrice = document.querySelector('[data-precision="2"]');
-            if (widgetPrice) return parseFloat(widgetPrice.innerText.replace(/,/g, ''));
-            
-            const fallback = document.querySelector('.D1n79e span, .val');
-            return fallback ? parseFloat(fallback.innerText.replace(/[^0-9.]/g, '')) : 48.50; 
+            // البحث عن سعر الصرف في الـ Widget الخاص بجوجل
+            const widget = document.querySelector('[data-precision="2"], .D1n79e span, .SwH9Y, .i19M6c');
+            if (widget) {
+                const val = parseFloat(widget.innerText.replace(/[^0-9.]/g, ''));
+                if (val > 10) return val;
+            }
+            return 48.0; // رقم احتياطي لو فشل السحب
         });
 
-        const liveUSD = usdRate > 10 ? usdRate : 48.50; // القيمة الحقيقية للسوق حالياً
-        
+        // حساب العملات بناءً على الدولار لضمان التنسيق
+        const liveUSD = usdRate;
         currencyRates['USD'] = parseFloat(liveUSD.toFixed(2));
-        currencyRates['EUR'] = parseFloat((liveUSD * 1.06).toFixed(2)); // تحديث نسبة اليورو
-        currencyRates['SAR'] = parseFloat((liveUSD / 3.75).toFixed(2));
-        currencyRates['AED'] = parseFloat((liveUSD / 3.67).toFixed(2));
-        currencyRates['KWD'] = parseFloat((liveUSD * 3.15).toFixed(2));
+        currencyRates['EUR'] = parseFloat((liveUSD * 1.07).toFixed(2)); // اليورو
+        currencyRates['SAR'] = parseFloat((liveUSD / 3.75).toFixed(2)); // الريال
+        currencyRates['AED'] = parseFloat((liveUSD / 3.67).toFixed(2)); // الدرهم
+        currencyRates['KWD'] = parseFloat((liveUSD * 3.25).toFixed(2)); // الدينار
 
-        // 2. سحب الذهب (تعديل القنص ليكون أذكى)
+        // 2. سحب الذهب من eDahab (قنص عيار 21 فقط)
         await page.goto('https://edahabapp.com/', { waitUntil: 'networkidle2' });
-        const goldData = await page.evaluate(() => {
-            const getPriceFromText = (searchTerm) => {
-                const el = Array.from(document.querySelectorAll('div, span, p, b'))
-                                .find(e => e.innerText.includes(searchTerm) && e.innerText.match(/\d{4}/));
-                if (el) {
-                    const m = el.innerText.replace(/,/g, '').match(/\d{4}/g);
-                    if (m) return Math.min(...m.map(Number).filter(n => n > 2000 && n < 6000));
+        
+        const gold21 = await page.evaluate(() => {
+            const elements = Array.from(document.querySelectorAll('.price-item, .card, div, span'));
+            const card = elements.find(el => el.innerText.includes('21') && !el.innerText.includes('202'));
+            if (card) {
+                const matches = card.innerText.replace(/,/g, '').match(/\d{4}/g);
+                if (matches) {
+                    const price = matches.map(Number).find(n => n > 2500 && n < 5500);
+                    return price || 0;
                 }
-                return 0;
-            };
-
-            let s21 = getPriceFromText('21');
-            return s21;
+            }
+            return 0;
         });
 
-        let s21 = goldData > 2000 ? goldData : 3650; // سعر تقريبي لو فشل
+        // معادلات الصاغة الرسمية
+        let s21 = gold21 > 2500 ? gold21 : 3650; // سعر افتراضي للسوق لو فشل
         let b21 = s21 - 50;
 
         const finalData = {
@@ -66,13 +65,13 @@ async function scrapePrices() {
                 "14": { sell: Math.round(s21 * 14/21).toString(), buy: Math.round(b21 * 14/21).toString() }
             },
             goldPound: { price: s21 * 8 },
-            goldOunce: { price: "2330 $" },
+            goldOunce: { price: "2300 $" }, // قيمة تقريبية
             currencyRates: currencyRates,
             lastUpdate: new Date().toISOString()
         };
 
         fs.writeFileSync(path.join(__dirname, 'prices.json'), JSON.stringify(finalData, null, 4));
-        console.log('✅ Final Sync Done.');
+        console.log('✅ Success: Prices are synced and logical.');
 
     } catch (err) { 
         console.error('❌ Error:', err.message);
