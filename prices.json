@@ -1,8 +1,8 @@
 {
     "gold": {
         "14": {
-            "sell": 14.59,
-            "buy": -5.41
+            "sell": 4620
+            "buy": 4585
         },
         "18": {
             "sell": 5935,
@@ -14,7 +14,7 @@
         }
     },
     "goldPound": {
-        "price": 0
+        "price": 55440
     },
     "goldOunce": {
         "price": "4571 $"
